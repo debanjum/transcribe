@@ -1,0 +1,8 @@
+# External app artifacts
+__pycache__
+.DS_Store
+.emacs.desktop*
+*.py[cod]
+.vscode
+.env
+.venv/*
