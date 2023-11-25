@@ -5,7 +5,7 @@ import uuid
 
 # External Packages
 import openai
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, HTMLResponse
 
@@ -38,7 +38,10 @@ def transcribe_widget():
 
 
 @app.post("/transcribe")
-async def transcribe_audio(file: UploadFile = File(...)):
+async def transcribe_audio(request: Request, file: UploadFile = File(...)):
+    if origins and request.client.host not in origins:
+        return Response(status_code=403)
+
     audio_filename = f"{str(uuid.uuid4())}.webm"
     user_message: str = None
 
