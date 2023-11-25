@@ -5,26 +5,26 @@ import uuid
 
 # External Packages
 import openai
-from fastapi import FastAPI, Request, UploadFile, File
+from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import Response, HTMLResponse
 
 
 app = FastAPI()
 
-# Allow Enforcing Allowed Hosts via CORS
-origins = os.getenv("ALLOWED_HOSTS", "").split(",")
-if isinstance(origins, str):
-    origins = [origins]
-origins = [f"https://{origin.strip()}" for origin in origins if origin.strip() != ""]
 
+# Only Allow Specified Hosts, Origins
+hosts = os.getenv("ALLOWED_HOSTS", "").split(",")
+if isinstance(hosts, str):
+    hosts = [hosts]
+hosts = [host.strip() for host in hosts if host.strip() != ""]
+origins = [f"https://{host.strip()}" for host in hosts if host.strip() != ""]
+
+if hosts:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)
 if origins:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=origins,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["*"], allow_headers=["*"])
 
 # Configure OpenAI API Key
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -42,10 +42,7 @@ def transcribe_widget():
 
 
 @app.post("/transcribe")
-async def transcribe_audio(request: Request, file: UploadFile = File(...)):
-    if origins and request.client.host not in origins:
-        return Response(content=f"{request.client.host} not allowed", status_code=403)
-
+async def transcribe_audio(file: UploadFile = File(...)):
     audio_filename = f"{str(uuid.uuid4())}.webm"
     user_message: str = None
 
