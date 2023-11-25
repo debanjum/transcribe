@@ -6,11 +6,26 @@ import uuid
 # External Packages
 import openai
 from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, HTMLResponse
 
 
-openai.api_key = os.getenv("OPENAI_API_KEY")
 app = FastAPI()
+
+# Allow Enforcing Allowed Hosts via CORS
+origins = os.getenv("ALLOWED_HOSTS", "").split(",")
+if origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+# Configure OpenAI API Key
+openai.api_key = os.getenv("OPENAI_API_KEY")
+if openai.api_key is None:
+    raise Exception("Missing OPENAI_API_KEY environment variable")
 
 
 @app.get("/", response_class=HTMLResponse)
