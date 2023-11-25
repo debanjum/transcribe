@@ -28,8 +28,37 @@ if openai.api_key is None:
     raise Exception("Missing OPENAI_API_KEY environment variable")
 
 
+@app.post("/transcribe")
+async def transcribe_audio(file: UploadFile = File(...)):
+    audio_filename = f"{str(uuid.uuid4())}.webm"
+    user_message: str = None
+
+    # Transcribe the audio from the request
+    try:
+        # Store the audio from the request in a temporary file
+        audio_data = await file.read()
+        with open(audio_filename, "wb") as audio_file_writer:
+            audio_file_writer.write(audio_data)
+        audio_file = open(audio_filename, "rb")
+
+        # Send the audio data to the Whisper API
+        response = openai.audio.translations.create(model="whisper-1", file=audio_file)
+        user_message = response.text
+    finally:
+        # Close and Delete the temporary audio file
+        audio_file.close()
+        os.remove(audio_filename)
+
+    if user_message is None:
+        return Response(status_code=500)
+
+    # Return the spoken text
+    content = json.dumps({"text": user_message})
+    return Response(content=content, media_type="application/json", status_code=200)
+
+
 @app.get("/", response_class=HTMLResponse)
-def speak_interface():
+def transcribe_widget():
     return """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -147,7 +176,7 @@ def speak_interface():
                 const formData = new FormData();
                 formData.append('file', audioBlob);
 
-                fetch('/speak', { method: 'POST', body: formData })
+                fetch('/transcribe', { method: 'POST', body: formData })
                     .then(response => response.ok ? response.json() : Promise.reject(response))
                     .then(data => {
                         if (!!chatInput.innerText) chatInput.innerText += `\n\n`;
@@ -193,32 +222,3 @@ def speak_interface():
 </body>
 </html>
 """
-
-@app.post("/speak")
-async def transcribe_audio(file: UploadFile = File(...)):
-    audio_filename = f"{str(uuid.uuid4())}.webm"
-    user_message: str = None
-
-    # Transcribe the audio from the request
-    try:
-        # Store the audio from the request in a temporary file
-        audio_data = await file.read()
-        with open(audio_filename, "wb") as audio_file_writer:
-            audio_file_writer.write(audio_data)
-        audio_file = open(audio_filename, "rb")
-
-        # Send the audio data to the Whisper API
-        response = openai.audio.translations.create(model="whisper-1", file=audio_file)
-        user_message = response.text
-    finally:
-        # Close and Delete the temporary audio file
-        audio_file.close()
-        os.remove(audio_filename)
-
-    if user_message is None:
-        return Response(status_code=500)
-
-    # Return the spoken text
-    content = json.dumps({"text": user_message})
-    return Response(content=content, media_type="application/json", status_code=200)
-
