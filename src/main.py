@@ -9,6 +9,7 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import Response, HTMLResponse
 
 
+openai.api_key = os.getenv("OPENAI_API_KEY")
 app = FastAPI()
 
 
@@ -61,6 +62,11 @@ def speak_interface():
   #description {
     font-size: 18px;
   }
+  #transcript {
+    position: relative;
+    padding-top: 1rem;
+    font-style: italic;
+  }
   .actions-row {
     display: flex;
     position: relative;
@@ -86,8 +92,11 @@ def speak_interface():
   .button-record {
     background-color: rgb(23, 201, 100);
   }
-  .button-stop {
+  .button-reset {
     background-color: rgb(26, 92, 255);
+  }
+  .button-stop {
+    background-color: red;
   }
 </style>
 </head>
@@ -95,21 +104,76 @@ def speak_interface():
 <div class="container">
   <div id="title" class="text">District Court Proceeding</div>
   <p id="description" class="text">Generate Transcript</p>
+  <div id="transcript" class="text"></div>
   <div class="actions-row">
     <div></div>
     <div class="action-buttons">
-        <button class="button button-record">
+        <button id="speak-button" onclick="speechToText()" class="button button-record">
             <box-icon name="microphone" color="white"></box-icon>
         </button>
-        <button class="button button-stop">
-            <box-icon name="reset" color="white"></box-icon>
+        <button class="button button-reset">
+            <box-icon name="reset" color="white" onclick="clearTranscript()"></box-icon>
         </button>
     </div>
   </div>
 </div>
 <script src="https://unpkg.com/boxicons@2.1.4/dist/boxicons.js"></script>
 <script>
-// Add JavaScript here for button interactions if necessary
+        clearTranscript = () => {
+            document.getElementById('transcript').innerText = '';
+        }
+
+        let mediaRecorder;
+        function speechToText() {
+            const speakButton = document.getElementById('speak-button');
+            const chatInput = document.getElementById('transcript');
+
+            const sendToServer = (audioBlob) => {
+                const formData = new FormData();
+                formData.append('file', audioBlob);
+
+                fetch('/speak', { method: 'POST', body: formData })
+                    .then(response => response.ok ? response.json() : Promise.reject(response))
+                    .then(data => {
+                        if (!!chatInput.innerText) chatInput.innerText += `\n\n`;
+                        chatInput.innerText += data.text;
+                    })
+                    .catch(err => err.status == 422 ? console.error("Configure speech-to-text model on server.") : console.error("Failed to transcribe audio"));
+            };
+
+            const handleRecording = (stream) => {
+                const audioChunks = [];
+                const recordingConfig = { mimeType: 'audio/webm' };
+                mediaRecorder = new MediaRecorder(stream, recordingConfig);
+
+                mediaRecorder.addEventListener("dataavailable", function(event) {
+                    if (event.data.size > 0) audioChunks.push(event.data);
+                });
+
+                mediaRecorder.addEventListener("stop", function() {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    sendToServer(audioBlob);
+                });
+
+                mediaRecorder.start();
+                speakButton.classList.add('button-stop');
+                speakButton.innerHTML = '<box-icon name="stop" color="white" alt="Stop Recording"></box-icon>';
+            };
+
+            // Toggle recording
+            if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+                navigator.mediaDevices
+                .getUserMedia({ audio: true })
+                .then(handleRecording)
+                .catch((e) => {
+                    console.error(e);
+                });
+            } else if (mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                speakButton.classList.remove('button-stop');
+                speakButton.innerHTML = '<box-icon name="microphone" color="white" alt="Record"></box-icon>';
+            }
+        }
 </script>
 </body>
 </html>
@@ -129,9 +193,8 @@ async def transcribe_audio(file: UploadFile = File(...)):
         audio_file = open(audio_filename, "rb")
 
         # Send the audio data to the Whisper API
-        api_key = os.getenv("OPENAI_API_KEY")
-        response = openai.Audio.translate(model="whisper-1", file=audio_file, api_key=api_key)
-        user_message = response["text"]
+        response = openai.audio.translations.create(model="whisper-1", file=audio_file)
+        user_message = response.text
     finally:
         # Close and Delete the temporary audio file
         audio_file.close()
