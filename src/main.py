@@ -63,7 +63,11 @@ async def transcribe_audio(file: UploadFile = File(...)):
         audio_file = open(audio_filename, "rb")
 
         # Send the audio data to the Whisper API
-        response = openai.audio.translations.create(model="whisper-1", file=audio_file)
+        response = openai.audio.translations.create(
+            model="whisper-1",
+            file=audio_file,
+            prompt=os.getenv("WHISPER_PROMPT"),
+        )
         user_message = response.text
     finally:
         # Close and Delete the temporary audio file
