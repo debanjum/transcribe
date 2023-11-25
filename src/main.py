@@ -14,6 +14,10 @@ app = FastAPI()
 
 # Allow Enforcing Allowed Hosts via CORS
 origins = os.getenv("ALLOWED_HOSTS", "").split(",")
+if isinstance(origins, str):
+    origins = [origins]
+origins = [f"https://{origin.strip()}" for origin in origins if origin.strip() != ""]
+
 if origins:
     app.add_middleware(
         CORSMiddleware,
@@ -40,7 +44,7 @@ def transcribe_widget():
 @app.post("/transcribe")
 async def transcribe_audio(request: Request, file: UploadFile = File(...)):
     if origins and request.client.host not in origins:
-        return Response(status_code=403)
+        return Response(content=f"{request.client.host} not allowed", status_code=403)
 
     audio_filename = f"{str(uuid.uuid4())}.webm"
     user_message: str = None
@@ -67,4 +71,3 @@ async def transcribe_audio(request: Request, file: UploadFile = File(...)):
     # Return the spoken text
     content = json.dumps({"text": user_message})
     return Response(content=content, media_type="application/json", status_code=200)
-
