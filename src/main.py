@@ -1,6 +1,7 @@
 # Standard Packages
 import json
 import os
+import socket
 import uuid
 
 # External Packages
@@ -8,6 +9,7 @@ import openai
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from fastapi.responses import Response, HTMLResponse
 
 
@@ -21,8 +23,14 @@ if isinstance(hosts, str):
 hosts = [host.strip() for host in hosts if host.strip() != ""]
 origins = [f"https://{host.strip()}" for host in hosts if host.strip() != ""]
 
+# Use Forwarded Host Header from Reverse Proxy for Trusted Hosts Check
+container_name = os.getenv("PROXY_CONTAINER_NAME") # Get the IP Address of the Reverse Proxy Container
+if container_name and (proxy_ip := socket.gethostbyname(container_name)):
+    # Set Reverse Proxies Container I.P as Trusted for recieving X-FORWARDED headers
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=proxy_ip)
 if hosts:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)
+# Allow CORS for Specified Origins
 if origins:
     app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["*"], allow_headers=["*"])
 
