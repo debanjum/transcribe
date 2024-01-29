@@ -1,0 +1,13 @@
+version: '3.9'
+
+services:
+  transcribe:
+    build: .
+    volume:
+      - transcribe:/app/src/
+    environment:
+      - OPENAI_API_KEY=<YOUR-OPENAI-API-KEY>
+      - ALLOWED_HOSTS=example.com
+    ports:
+      - "8080:80"
+
